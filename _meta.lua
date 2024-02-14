@@ -1,6 +1,6 @@
 local _ = require("gettext")
 return {
-    name = "wlnreader",
-    fullname = _("WLN Reader"),
-    description = _([[Find and download your light/web novels]]),
+    name = "mangareader",
+    fullname = _("Manga Reader"),
+    description = _([[Read manga from online services in your e-reader.]]),
 }

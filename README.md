@@ -1,17 +1,12 @@
-# WLN Reader
+# Manga Reader
 
-WLN Reader is a bare-bones Web and Light novels searcher and downloader for KOReader. 
+**This is a working progress addon.**
 
-  - Search for releases from wlnupdates.com 
-  - Get links and query epubs to epub.press
-  - Magic
+Manga Reader is a bare-bones manga reader for KOReader. 
 
-# W-I-P (to do)
+  - Get content from various legal services.
+  - No download needed
 
-  - Detect "fake" links (usually pages with wordpress) that require another link redirect
-  - Maybe more detailed novel page  
-  
-
-
-
-
+# Know issue
+- Crash on previous page.
+- Add missing functionalities for services.
