@@ -7,7 +7,7 @@ local util = require("util")
 
 -- RequestManager Class
 local RequestManager = {}
-local responseBody = {}
+local response_body = {}
 
 -- Constructor
 function RequestManager:new()
@@ -24,14 +24,14 @@ function RequestManager:customRequest(url, method, data, headers)
         method = method,
         headers = headers == nil and {} or headers,
         source = ltn12.source.string(data == nil and "" or data),
-        sink = ltn12.sink.table(responseBody),
+        sink = ltn12.sink.table(response_body),
     }
 
     if status ~= 200 then
         return nil
     end
 
-    local content = table.concat(responseBody)
+    local content = table.concat(response_body)
     -- Check if the response is in JSON format.
     -- Don't rely on headers, as they are unreliable for Manga Nova.
     if util.stringStartsWith(content, "{") and util.stringEndsWith(content, "}") then

@@ -8,5 +8,4 @@ Manga Reader is a bare-bones manga reader for KOReader.
   - No download needed
 
 # Know issue
-- Crash on previous page.
 - Add missing functionalities for services.

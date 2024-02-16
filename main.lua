@@ -9,9 +9,6 @@ local Menu = require("ui/widget/menu")
 local MangaReader =
     WidgetContainer:extend {
         name = "MangaReader",
-        is_doc_only = false,
-        results = {},
-        path = {}
 }
 
 -- Initialization function for MangaReader
@@ -41,14 +38,12 @@ end
 function MangaReader:loadModule()
     -- Get the data directory for the plugin
     local data_dir = require("datastorage"):getDataDir()  .. "/plugins/mangareader.koplugin/websites/"
-    logger.info(data_dir)
     self.results = {}
 
     -- Iterate over files in the data directory
     for lookup_path in lfs.dir(data_dir) do
         local modules = {}
         if string.find(lookup_path, ".lua") then
-            logger.info(lookup_path)
             modules.text = lookup_path:gsub("%.lua", "")
             modules.path = data_dir..lookup_path
             table.insert(self.results, modules)
