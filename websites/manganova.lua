@@ -1,5 +1,4 @@
 local _ = require("gettext")
-local logger = require("logger")
 local table = require("table")
 
 local UIManager = require("ui/uimanager")
@@ -10,16 +9,15 @@ local InputDialog = require("ui/widget/inputdialog")
 
 local PicViewer = require("lib/picviewer")
 local requestManager = require("lib/requestmanager")
+local config = require ("config")
 
 local MangaNova =
     WidgetContainer:extend {
         module_name = "manganova",
         results = {},
         domain = "api.manga-nova.com",
+        token = config.manganova.token,
 }
-
--- Offline generic token
-local token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJtZW1icmVfaWQiOjAsIm1lbWJyZV91c2VybmFtZSI6bnVsbCwiaWF0IjoxNzA1NTc5MDQ1fQ.51qivLd2l3OKbDaYYzlntZJNnreRSBWO7p5Nsa2mAsA"
 
 function MangaNova:init()
     local menu = Menu:new{
@@ -83,7 +81,7 @@ function MangaNova:printCatalogue(query)
     -- Requête personnalisée
     local custom_headers = {
         ["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0",
-        ["Authorization"] = "Bearer " .. token,
+        ["Authorization"] = "Bearer " .. self.token,
         ["Origin"] = "https://www.manga-nova.com",
         ["Referer"] = "https://www.manga-nova.com/",
         ["Content-Type"] = "application/json",
@@ -97,11 +95,7 @@ function MangaNova:printCatalogue(query)
         for i = 1, #responses.series do
             local temp = {}
 
-            if query == nil then
-                temp.text = responses.series[i].title
-                temp.slug = responses.series[i].slug
-            -- It's a search
-            elseif string.find(string.lower(responses.series[i].title), query) ~= nil then
+            if query == nil or string.match(string.lower(responses.series[i].title), query) ~= nil then
                 temp.text = responses.series[i].title
                 temp.slug = responses.series[i].slug
             end
@@ -112,7 +106,7 @@ function MangaNova:printCatalogue(query)
     end
 
     -- Can happend if search return any result.
-    if self.results == {} then
+    if next(self.results) == nil then
         -- Display an info message if no manga is found
         UIManager:show(
             InfoMessage:new {
@@ -157,10 +151,10 @@ end
 function MangaNova:titleDetail(slug)
     local url = string.format("https://%s/mangas/%s", self.domain, slug)
 
-    -- Requête personnalisée
+    -- Custom request
     local custom_headers = {
         ["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0",
-        ["Authorization"] = "Bearer " .. token,
+        ["Authorization"] = "Bearer " .. self.token,
         ["Origin"] = "https://www.manga-nova.com",
         ["Referer"] = "https://www.manga-nova.com/",
         ["Content-Type"] = "application/json",
@@ -213,16 +207,16 @@ end
 function MangaNova:picList(slug, chap_id)
     local url = string.format("https://%s/mangas/%s/chapitres/%s", self.domain, slug, chap_id)
 
-    -- Requête personnalisée
+    -- Custom request
     local custom_headers = {
         ["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0",
-        ["Authorization"] = "Bearer " .. token,
+        ["Authorization"] = "Bearer " .. self.token,
         ["Origin"] = "https://www.manga-nova.com",
         ["Referer"] = "https://www.manga-nova.com/",
         ["Content-Type"] = "application/json",
     }
     local responses = requestManager:customRequest(url, "GET", nil, custom_headers)
-    logger.info("Chapter NB page " ..#responses.images)
+
     if responses then
         self.results = {}
 

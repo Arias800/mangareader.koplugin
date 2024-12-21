@@ -1,6 +1,5 @@
 local _ = require("gettext")
 local table = require("table")
-local logger = require("logger")
 
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local InfoMessage = require("ui/widget/infomessage")
@@ -10,11 +9,14 @@ local InputDialog = require("ui/widget/inputdialog")
 
 local PicViewer = require("lib/picviewer")
 local requestManager = require("lib/requestmanager")
+local config = require ("config")
 
 local MangaPlus =
     WidgetContainer:extend {
         module_name = "mangaplus",
         domain = "jumpg-webapi.tokyo-cdn.com",
+        quality = config.mangaplus.quality,
+        split = config.mangaplus.split,
 }
 
 -- Initialization function for MangaPlus
@@ -92,21 +94,18 @@ function MangaPlus:printCatalogue(query)
         for i = 1, #baseJSON do
             local temp = {}
 
-            if query == nil then
-                temp.text = baseJSON[i].theTitle
-                temp.lang = baseJSON[i].titles
-            -- It's a search
-            elseif string.find(string.lower(baseJSON[i].theTitle), query) ~= nil then
+            if query == nil or string.match(string.lower(baseJSON[i].theTitle), query) ~= nil then
                 temp.text = baseJSON[i].theTitle
                 temp.lang = baseJSON[i].titles
             end
+
             if temp.text then
                 table.insert(self.results, temp)
             end
         end
 
-        -- Cna happend if search return any result.
-        if self.results == {} then
+        -- Can happend if search return any result.
+        if next(self.results) == nil then
             -- Display an info message if no manga is found
             UIManager:show(
                 InfoMessage:new {
@@ -192,7 +191,7 @@ end
 function MangaPlus:titleDetail(slug)
     local url = string.format("https://%s/api/title_detail?title_id=%s&format=json", self.domain, slug)
 
-    -- Requête personnalisée
+    -- Custom request
     local customHeaders = {
         ["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0",
         ["Content-Type"] = "application/json",
@@ -246,9 +245,9 @@ end
 
 -- Display the list of pictures for a specific chapter
 function MangaPlus:picList(chap_id)
-    local url = string.format("https://%s/api/manga_viewer?chapter_id=%s&split=yes&img_quality=super_high&format=json", self.domain, chap_id)
+    local url = string.format("https://%s/api/manga_viewer?chapter_id=%s&split=%s&img_quality=%s&format=json", self.domain, chap_id, self.split, self.quality)
 
-    -- Requête personnalisée
+    -- Custom request
     local customHeaders = {
         ["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0",
         ["Content-Type"] = "application/json",

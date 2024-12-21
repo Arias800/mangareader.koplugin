@@ -1,9 +1,10 @@
-local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local _ = require("gettext")
-local UIManager = require("ui/uimanager")
 local logger = require("logger")
 local table = require("table")
+
 local lfs = require("libs/libkoreader-lfs")
+local UIManager = require("ui/uimanager")
+local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local Menu = require("ui/widget/menu")
 
 local MangaReader =
@@ -38,6 +39,7 @@ end
 function MangaReader:loadModule()
     -- Get the data directory for the plugin
     local data_dir = require("datastorage"):getDataDir()  .. "/plugins/mangareader.koplugin/websites/"
+
     self.results = {}
 
     -- Iterate over files in the data directory
