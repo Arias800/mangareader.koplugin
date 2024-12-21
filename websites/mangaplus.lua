@@ -189,7 +189,7 @@ end
 
 -- Display details of a specific manga title
 function MangaPlus:titleDetail(slug)
-    local url = string.format("https://%s/api/title_detail?title_id=%s&format=json", self.domain, slug)
+    local url = string.format("https://%s/api/title_detailV3?title_id=%s&format=json", self.domain, slug)
 
     -- Custom request
     local customHeaders = {
@@ -197,19 +197,21 @@ function MangaPlus:titleDetail(slug)
         ["Content-Type"] = "application/json",
     }
     local responses = requestManager:customRequest(url, "GET", nil, customHeaders)
-    local baseJSON = responses.success.titleDetailView
+    local baseJSON = responses.success.titleDetailView.chapterListGroup
 
     if responses then
         self.results = {}
 
         -- Extract information about chapters from the JSON response
-        for k, v in pairs(baseJSON) do
-            if k == "firstChapterList" or k == "lastChapterList" then
-                for i = 1, #v do
-                    local temp = {}
-                    temp.text = v[i].name
-                    temp.number = v[i].chapterId
-                    table.insert(self.results, temp)
+        for a, b in pairs(baseJSON) do
+            for k, v in pairs(b) do
+                if k == "firstChapterList" or k == "lastChapterList" then
+                    for i = 1, #v do
+                        local temp = {}
+                        temp.text = v[i].name
+                        temp.number = v[i].chapterId
+                        table.insert(self.results, temp)
+                    end
                 end
             end
         end
@@ -274,7 +276,7 @@ function MangaPlus:picList(chap_id)
         -- Display an info message if no pictures are found
         UIManager:show(
             InfoMessage:new {
-                text = _("No chapter found!"),
+                text = _("End of chapter"),
                 timeout = 3
             }
         )
