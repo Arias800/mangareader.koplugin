@@ -8,121 +8,210 @@ local InfoMessage = require("ui/widget/infomessage")
 local ImageViewer = require("ui/widget/imageviewer")
 local UIManager = require("ui/uimanager")
 local RenderImage = require("ui/renderimage")
+local Blitbuffer = require("ffi/blitbuffer")
 
 local PicViewer = {
-    -- Current page
     current_page = 1,
-    -- Total number of loaded picture
     loaded_picture = 0,
     pic_data = {},
+    preload_finished = false,
+    batch_size = 2,  -- Load 2 pages at a time (double page)
+    loaded_pages = {},
+    url_list = nil,
+    fused_images = {},
 }
 
 function PicViewer:decryptXOR(encrypted, encryption_hex)
-    -- Convert the hexadecimal key into a character string
-    local key = encryption_hex:gsub("%x%x", function(c) return c.char(tonumber(c, 16)) end)
+    if not encrypted or not encryption_hex then return encrypted end
 
-    -- Initialize an array to store decrypted characters
+    local key = encryption_hex:gsub("%x%x", function(c)
+        return string.char(tonumber(c, 16))
+    end)
+
     local parsed = {}
-
-    -- Browse each character of the encrypted string
     for i = 1, #encrypted do
-        -- Use the XOR operation on the corresponding bytes of the encrypted string and key
-        local xor_result = bit.bxor(string.byte(encrypted, i), string.byte(key, ((i - 1) % #key) + 1))
-
-        -- Convert the XOR result into a character and add it to the array
+        local xor_result = bit.bxor(
+            string.byte(encrypted, i),
+            string.byte(key, ((i - 1) % #key) + 1)
+        )
         parsed[i] = string.char(xor_result)
     end
 
-    -- Concatenate the decoded characters to form the final decoded string
-    return table.concat(parsed, "")
+    return table.concat(parsed)
 end
 
 function PicViewer:displayPic(url_list)
-    -- Current page
-    self.current_page = 1 -- Lua isn't zero based
-    -- Total number of loaded picture
-    self.loaded_picture = 1
-    self.pic_data = {}
-    local response_body = {}
-
-    https.request {
-        url = url_list[self.current_page].path,
-        sink = ltn12.sink.table(response_body),
-        headers = {
-            ["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0",
-        },
-    }
-    local content = table.concat(response_body)
-
-    if url_list[self.current_page].key then
-        content = PicViewer:decryptXOR(content, url_list[self.current_page].key)
+    if not url_list or #url_list == 0 then
+        UIManager:show(InfoMessage:new{ text = _("No images to display."), timeout = 3 })
+        return
     end
 
-    -- Initialize the viewer with the first page
-    local bmp = RenderImage:renderImageData(content, #content, false)
-    table.insert(self.pic_data, bmp)
+    self.url_list = url_list
 
-    local viewer = ImageViewer:new{
-        image = self.pic_data,
-        fullscreen = true,
-        with_title_bar = false,
-        images_list_nb = #url_list,
+    print("Starting to display pics, total pages:", #url_list)
 
-        onShowNextImage = function(viewer)
-            -- Function to load next picture
-            PicViewer:lazy(viewer, url_list)
-        end,
+    if #url_list % 2 ~= 0 and self.current_page == 1 then
+        -- Insert a placeholder image in the second position
+        table.insert(url_list, 2, { path = "white", key = nil })  -- Placeholder image
+    end
 
-        onShowPrevImage = function(viewer)
-            -- Return to the previous page.
-            -- Obviously we don't want to go under 1.
-            if self.current_page ~= 1 then
-                self.current_page = self.current_page - 1
-                viewer:switchToImageNum(self.current_page)
-            end
-            return self.current_page
-        end,
-    }
-    -- Needed to reuse picture
-    viewer.image_disposable = false
-    UIManager:show(viewer)
-
+    self:loadPagesRange(1, math.min(self.batch_size, #url_list), function()
+        self.fused_images = self:createFusedImages()
+        self.viewer = ImageViewer:new{
+            image = self.fused_images,
+            fullscreen = true,
+            with_title_bar = false,
+            images_list_nb = math.ceil(#url_list / 2),
+            onShowNextImage = function() self:loadNextPage() end,
+            onShowPrevImage = function() self:loadPrevPage() end,
+            onClose = function() self:cleanup() end,
+        }
+        self.viewer.image_disposable = false
+        UIManager:show(self.viewer)
+    end)
 end
 
-function PicViewer:lazy(viewer, url_list)
-    self.current_page = self.current_page + 1
-    local response_body = {}
-    if self.current_page > #url_list then
-        UIManager:show(
-            InfoMessage:new {
-                text = _("Chapter ended."),
-                timeout = 3
-            }
-        )
-        UIManager:close(viewer)
-    else
-        -- No need to load picture twice
-        if self.current_page > self.loaded_picture then
-            https.request {
-                url = url_list[self.current_page].path,
-                sink = ltn12.sink.table(response_body),
-                headers = {
-                    ["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0",
-                },
-            }
-            local content = table.concat(response_body)
+function PicViewer:loadNextPage()
+    if not self.url_list then return end
 
-            if url_list[self.current_page].key then
-                content = PicViewer:decryptXOR(content, url_list[self.current_page].key)
-            end
+    local next_page_start = self.current_page + self.batch_size
+    local next_page_end = math.min(next_page_start + self.batch_size - 1, #self.url_list)
 
-            local bmp = RenderImage:renderImageData(content, #content, false)
-            table.insert(self.pic_data, bmp)
-
-            self.loaded_picture = self.loaded_picture + 1
-        end
-        viewer:switchToImageNum(self.current_page)
+    if next_page_start > #self.url_list then
+        UIManager:show(InfoMessage:new{ text = _("Chapter ended."), timeout = 3 })
+        PicViewer:cleanup()
+        return
     end
+
+    if next_page_start <= self.current_page then
+        return
+    end
+
+    print("Loading next page set:", next_page_start, "to", next_page_end)
+    self:loadPagesRange(next_page_start, next_page_end, function()
+        self.current_page = next_page_start
+        self.fused_images = self:createFusedImages()
+        self.viewer:switchToImageNum(#self.fused_images)
+    end)
+end
+
+function PicViewer:loadPrevPage()
+    if not self.url_list then return end
+
+    local prev_page_end = self.current_page - 1
+    local prev_page_start = math.max(1, prev_page_end - self.batch_size + 1)
+
+    if prev_page_start < 1 then return end
+
+    if prev_page_start >= self.current_page then
+        return
+    end
+
+    print("Moving to previous page set:", prev_page_start, "to", prev_page_end)
+    self:loadPagesRange(prev_page_start, prev_page_end, function()
+        self.current_page = prev_page_start
+        self.fused_images = self:createFusedImages()
+        self.viewer:switchToImageNum(#self.fused_images - 1)
+    end)
+end
+
+function PicViewer:createFusedImages()
+    for i = #self.fused_images, 1, -1 do
+        self.fused_images[i] = nil
+    end
+
+    for i = 1, #self.pic_data, 2 do
+        local img1 = self.pic_data[i]
+        local img2 = self.pic_data[i + 1] or nil
+        if img1 then
+            table.insert(self.fused_images, img2 and self:fuseImages(img2, img1) or img1)
+        end
+    end
+
+    return self.fused_images
+end
+
+function PicViewer:loadPagesRange(start_page, end_page, callback)
+    end_page = math.min(end_page, #self.url_list)
+    local loaded_count = 0
+    local total_to_load = end_page - start_page + 1
+
+    for i = start_page, end_page do
+        if not self.loaded_pages[i] then
+            print("Loading page:", i)
+
+            local image_path = self.url_list[i].path
+            if image_path == "white" then
+                print("Odd total page number")
+            else
+                local success, content = pcall(function()
+                    local response_body = {}
+                    local result, code = https.request{
+                        url = image_path,
+                        sink = ltn12.sink.table(response_body),
+                        headers = { ["User-Agent"] = "Mozilla/5.0" },
+                    }
+
+                    if code ~= 200 then
+                        error(string.format("Failed to load image %d: HTTP %d", i, code))
+                    end
+                    local content = table.concat(response_body)
+                    if self.url_list[i].key then
+                        content = self:decryptXOR(content, self.url_list[i].key)
+                    end
+                    return content
+                end)
+
+                if success then
+                    local bmp = RenderImage:renderImageData(content, #content, false)
+                    if bmp then
+                        self.pic_data[i] = bmp
+                        self.loaded_pages[i] = true
+                        self.loaded_picture = self.loaded_picture + 1
+                        print("Successfully loaded page:", i)
+                    end
+                else
+                    UIManager:show(InfoMessage:new{ text = _("Failed to load image: " .. tostring(content)), timeout = 3 })
+                    print("Failed to load page:", i)
+                end
+            end
+        end
+        loaded_count = loaded_count + 1
+        if loaded_count == total_to_load and callback then
+            callback()
+        end
+    end
+end
+
+function PicViewer:fuseImages(bb1, bb2)
+    if not bb1 then return bb2 end
+    if not bb2 then return bb1 end
+
+    local fused_bb = Blitbuffer.new(bb1:getWidth() + bb2:getWidth(), math.max(bb1:getHeight(), bb2:getHeight()), bb1:getType())
+    fused_bb:blitFrom(bb1, 0, 0)
+    fused_bb:blitFrom(bb2, bb1:getWidth(), 0)
+
+    return fused_bb
+end
+
+function PicViewer:cleanup()
+    -- Clear all loaded picture data
+    self.pic_data = {}
+    self.loaded_pages = {}
+    self.fused_images = {}
+
+    -- Reset current page to the first page
+    self.current_page = 1
+    self.loaded_picture = 0
+    self.preload_finished = false
+    self.batch_size = 2  -- Reset batch size if needed
+
+    -- Close the viewer widget (if it's open)
+    if self.viewer then
+        UIManager:close(self.viewer)
+    end
+
+    print("PicViewer resources cleaned up.")
 end
 
 return PicViewer

@@ -16,8 +16,7 @@ local MangaPlus =
         module_name = "mangaplus",
         domain = "jumpg-webapi.tokyo-cdn.com",
         quality = config.mangaplus.quality,
-        split = config.mangaplus.split,
-}
+    }
 
 -- Initialization function for MangaPlus
 function MangaPlus:init()
@@ -247,7 +246,7 @@ end
 
 -- Display the list of pictures for a specific chapter
 function MangaPlus:picList(chap_id)
-    local url = string.format("https://%s/api/manga_viewer?chapter_id=%s&split=%s&img_quality=%s&format=json", self.domain, chap_id, self.split, self.quality)
+    local url = string.format("https://%s/api/manga_viewer?chapter_id=%s&split=yes&img_quality=%s&format=json", self.domain, chap_id, self.quality)
 
     -- Custom request
     local customHeaders = {

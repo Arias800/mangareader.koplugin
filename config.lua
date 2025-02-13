@@ -6,8 +6,6 @@ local Config = {
     mangaplus = {
         -- Set picutre quality
         quality = "super_high",
-        -- Split the double picture
-        split = "no"
     }
 }
 return Config
