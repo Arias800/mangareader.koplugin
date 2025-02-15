@@ -1,6 +1,6 @@
+-- Import necessary modules
 local _ = require("gettext")
 local table = require("table")
-local https = require("ssl.https")
 local bit = require("bit")
 local ltn12 = require("ltn12")
 
@@ -9,7 +9,10 @@ local ImageViewer = require("ui/widget/imageviewer")
 local UIManager = require("ui/uimanager")
 local RenderImage = require("ui/renderimage")
 local Blitbuffer = require("ffi/blitbuffer")
+local RequestManager = require("lib/requestmanager")  -- Import the RequestManager class
 
+--- PicViewer Module
+-- A module to manage and display images from a list of URLs.
 local PicViewer = {
     current_page = 1,
     loaded_picture = 0,
@@ -19,8 +22,13 @@ local PicViewer = {
     loaded_pages = {},
     url_list = nil,
     fused_images = {},
+    request_manager = RequestManager:new(),  -- Initialize RequestManager
 }
 
+--- Decrypts a string using XOR with a given hex key.
+-- @param encrypted The encrypted string.
+-- @param encryption_hex The hex key for decryption.
+-- @return The decrypted string.
 function PicViewer:decryptXOR(encrypted, encryption_hex)
     if not encrypted or not encryption_hex then return encrypted end
 
@@ -40,6 +48,8 @@ function PicViewer:decryptXOR(encrypted, encryption_hex)
     return table.concat(parsed)
 end
 
+--- Displays images from a list of URLs.
+-- @param url_list A list of URLs to display.
 function PicViewer:displayPic(url_list)
     if not url_list or #url_list == 0 then
         UIManager:show(InfoMessage:new{ text = _("No images to display."), timeout = 3 })
@@ -71,6 +81,7 @@ function PicViewer:displayPic(url_list)
     end)
 end
 
+--- Loads the next set of pages.
 function PicViewer:loadNextPage()
     if not self.url_list then return end
 
@@ -79,7 +90,7 @@ function PicViewer:loadNextPage()
 
     if next_page_start > #self.url_list then
         UIManager:show(InfoMessage:new{ text = _("Chapter ended."), timeout = 3 })
-        PicViewer:cleanup()
+        self:cleanup()
         return
     end
 
@@ -95,6 +106,7 @@ function PicViewer:loadNextPage()
     end)
 end
 
+--- Loads the previous set of pages.
 function PicViewer:loadPrevPage()
     if not self.url_list then return end
 
@@ -115,6 +127,8 @@ function PicViewer:loadPrevPage()
     end)
 end
 
+--- Creates fused images from loaded picture data.
+-- @return A table of fused images.
 function PicViewer:createFusedImages()
     for i = #self.fused_images, 1, -1 do
         self.fused_images[i] = nil
@@ -131,6 +145,10 @@ function PicViewer:createFusedImages()
     return self.fused_images
 end
 
+--- Loads a range of pages from the URL list.
+-- @param start_page The starting page index.
+-- @param end_page The ending page index.
+-- @param callback The callback function to execute after loading.
 function PicViewer:loadPagesRange(start_page, end_page, callback)
     end_page = math.min(end_page, #self.url_list)
     local loaded_count = 0
@@ -145,21 +163,14 @@ function PicViewer:loadPagesRange(start_page, end_page, callback)
                 print("Odd total page number")
             else
                 local success, content = pcall(function()
-                    local response_body = {}
-                    local result, code = https.request{
-                        url = image_path,
-                        sink = ltn12.sink.table(response_body),
-                        headers = { ["User-Agent"] = "Mozilla/5.0" },
-                    }
-
-                    if code ~= 200 then
-                        error(string.format("Failed to load image %d: HTTP %d", i, code))
+                    local response = self.request_manager:customRequest(image_path, "GET", nil, { ["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0" })
+                    if not response then
+                        error("Failed to load image")
                     end
-                    local content = table.concat(response_body)
                     if self.url_list[i].key then
-                        content = self:decryptXOR(content, self.url_list[i].key)
+                        return self:decryptXOR(response, self.url_list[i].key)
                     end
-                    return content
+                    return response
                 end)
 
                 if success then
@@ -183,6 +194,10 @@ function PicViewer:loadPagesRange(start_page, end_page, callback)
     end
 end
 
+--- Fuses two images into one.
+-- @param bb1 The first image.
+-- @param bb2 The second image.
+-- @return The fused image.
 function PicViewer:fuseImages(bb1, bb2)
     if not bb1 then return bb2 end
     if not bb2 then return bb1 end
@@ -194,6 +209,7 @@ function PicViewer:fuseImages(bb1, bb2)
     return fused_bb
 end
 
+--- Cleans up resources and resets the viewer.
 function PicViewer:cleanup()
     -- Clear all loaded picture data
     self.pic_data = {}

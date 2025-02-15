@@ -1,3 +1,4 @@
+-- Import necessary modules
 local _ = require("gettext")
 local table = require("table")
 
@@ -9,31 +10,34 @@ local InputDialog = require("ui/widget/inputdialog")
 
 local PicViewer = require("lib/picviewer")
 local requestManager = require("lib/requestmanager")
-local config = require ("config")
+local config = require("config")
 
-local MangaNova =
-    WidgetContainer:extend {
-        module_name = "manganova",
-        results = {},
-        domain = "api.manga-nova.com",
-        token = config.manganova.token,
+--- MangaNova Class
+-- Handles interactions with the MangaNova API to search, display, and read manga.
+local MangaNova = WidgetContainer:extend{
+    module_name = "manganova",
+    results = {},
+    domain = "api.manga-nova.com",
+    token = config.manganova.token,
 }
 
+--- Initialize MangaNova
+-- Sets up the initial menu for MangaNova.
 function MangaNova:init()
     local menu = Menu:new{
-        title = "Manga Nova menu :",
+        title = _("Manga Nova Menu"),
         no_title = false,
         item_table = {
             {
                 text = _("Search"),
                 callback = function()
-                    MangaNova:searchTitle()
+                    self:searchTitle()
                 end,
             },
             {
                 text = _("Catalogue"),
                 callback = function()
-                    MangaNova:printCatalogue(nil)
+                    self:printCatalogue(nil)
                 end,
             },
         },
@@ -41,13 +45,13 @@ function MangaNova:init()
     UIManager:show(menu)
 end
 
--- Search keyboard
+--- Display search dialog for manga titles
+-- Allows the user to input a search string to find manga titles.
 function MangaNova:searchTitle()
- self.search_server_dialog = InputDialog:new{
-        title = _("Search manga"),
+    self.search_server_dialog = InputDialog:new{
+        title = _("Search Manga"),
         input = "",
         hint = _("Search string"),
-
         input_hint = _("One Piece"),
         input_type = "string",
         description = _("Title of the manga:"),
@@ -64,7 +68,7 @@ function MangaNova:searchTitle()
                     is_enter_default = true,
                     callback = function()
                         UIManager:close(self.search_server_dialog)
-                        MangaNova:printCatalogue(string.lower(self.search_server_dialog:getInputText()))
+                        self:printCatalogue(string.lower(self.search_server_dialog:getInputText()))
                     end,
                 },
             }
@@ -74,18 +78,12 @@ function MangaNova:searchTitle()
     self.search_server_dialog:onShowKeyboard()
 end
 
--- Display the manga catalog
+--- Display the manga catalog
+-- Fetches and displays the list of manga titles from the MangaNova API.
+-- @param query Optional search query to filter manga titles.
 function MangaNova:printCatalogue(query)
     local url = string.format("https://%s/catalogue/", self.domain)
-
-    -- Requête personnalisée
-    local custom_headers = {
-        ["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0",
-        ["Authorization"] = "Bearer " .. self.token,
-        ["Origin"] = "https://www.manga-nova.com",
-        ["Referer"] = "https://www.manga-nova.com/",
-        ["Content-Type"] = "application/json",
-    }
+    local custom_headers = self:getCustomHeaders()
     local responses = requestManager:customRequest(url, "GET", nil, custom_headers)
 
     if responses then
@@ -94,38 +92,27 @@ function MangaNova:printCatalogue(query)
         -- Extract relevant information from the JSON response
         for i = 1, #responses.series do
             local temp = {}
-
             if query == nil or string.match(string.lower(responses.series[i].title), query) ~= nil then
                 temp.text = responses.series[i].title
                 temp.slug = responses.series[i].slug
-            end
-
-            if temp.text then
                 table.insert(self.results, temp)
+            end
         end
-    end
 
-    -- Can happend if search return any result.
-    if next(self.results) == nil then
         -- Display an info message if no manga is found
-        UIManager:show(
-            InfoMessage:new {
-                text = _("No manga found!"),
-                timeout = 3
-            }
-        )
-        return
-    end
+        if next(self.results) == nil then
+            UIManager:show(InfoMessage:new{ text = _("No manga found!"), timeout = 3 })
+            return
+        end
 
         -- Create and show the menu with catalog content
         self.menu = Menu:new{
-            title = "Catalogue content:",
+            title = _("Catalogue Content"),
             no_title = false,
             item_table = self.results,
-
-            onMenuSelect = function(self_menu, item)
+            onMenuSelect = function(_, item)
                 UIManager:close(self.menu)
-                MangaNova:titleDetail(item.slug)
+                self:titleDetail(item.slug)
             end,
             close_callback = function()
                 UIManager:close(self.menu)
@@ -136,53 +123,41 @@ function MangaNova:printCatalogue(query)
         }
         UIManager:show(self.menu)
     else
-        -- Display an info message if no manga is found
-        UIManager:show(
-            InfoMessage:new {
-                text = _("No manga found!"),
-                timeout = 3
-            }
-        )
+        UIManager:show(InfoMessage:new{ text = _("No manga found!"), timeout = 3 })
     end
-    return
 end
 
--- Display details of a specific manga title
+--- Display details of a specific manga title
+-- Fetches and displays the list of chapters for a specific manga title.
+-- @param slug The slug identifier of the manga title.
 function MangaNova:titleDetail(slug)
     local url = string.format("https://%s/mangas/%s", self.domain, slug)
-
-    -- Custom request
-    local custom_headers = {
-        ["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0",
-        ["Authorization"] = "Bearer " .. self.token,
-        ["Origin"] = "https://www.manga-nova.com",
-        ["Referer"] = "https://www.manga-nova.com/",
-        ["Content-Type"] = "application/json",
-    }
+    local custom_headers = self:getCustomHeaders()
     local responses = requestManager:customRequest(url, "GET", nil, custom_headers)
+
     if responses then
         self.results = {}
 
         -- Extract information about chapters from the JSON response
         for i = 1, #responses.serie.chapitres do
             for j = 1, #responses.serie.chapitres[i].chapitres do
-                local temp = {}
-                temp.text = responses.serie.chapitres[i].chapitres[j].title
-                temp.number = responses.serie.chapitres[i].chapitres[j].number
-                temp.slug = slug
+                local temp = {
+                    text = responses.serie.chapitres[i].chapitres[j].title,
+                    number = responses.serie.chapitres[i].chapitres[j].number,
+                    slug = slug
+                }
                 table.insert(self.results, temp)
             end
         end
 
         -- Create and show the menu with the chapter list
         self.menu = Menu:new{
-            title = "Chapter list :",
+            title = _("Chapter List"),
             no_title = false,
             item_table = self.results,
-
-            onMenuSelect = function(self_menu, item)
+            onMenuSelect = function(_, item)
                 UIManager:close(self.menu)
-                MangaNova:picList(item.slug, item.number)
+                self:picList(item.slug, item.number)
             end,
             close_callback = function()
                 UIManager:close(self.menu)
@@ -193,28 +168,17 @@ function MangaNova:titleDetail(slug)
         }
         UIManager:show(self.menu)
     else
-        -- Display an info message if no chapters are found
-        UIManager:show(
-            InfoMessage:new {
-                text = _("No chapter found!"),
-                timeout = 3
-            }
-        )
+        UIManager:show(InfoMessage:new{ text = _("No chapter found!"), timeout = 3 })
     end
 end
 
--- Display the list of pictures for a specific chapter
+--- Display the list of pictures for a specific chapter
+-- Fetches and displays the list of pictures for a specific chapter using PicViewer.
+-- @param slug The slug identifier of the manga title.
+-- @param chap_id The chapter number.
 function MangaNova:picList(slug, chap_id)
     local url = string.format("https://%s/mangas/%s/chapitres/%s", self.domain, slug, chap_id)
-
-    -- Custom request
-    local custom_headers = {
-        ["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0",
-        ["Authorization"] = "Bearer " .. self.token,
-        ["Origin"] = "https://www.manga-nova.com",
-        ["Referer"] = "https://www.manga-nova.com/",
-        ["Content-Type"] = "application/json",
-    }
+    local custom_headers = self:getCustomHeaders()
     local responses = requestManager:customRequest(url, "GET", nil, custom_headers)
 
     if responses then
@@ -222,23 +186,30 @@ function MangaNova:picList(slug, chap_id)
 
         -- Extract picture information from the JSON response
         for i = 1, #responses.images do
-            local temp = {}
-            temp.path = responses.images[i].image
-            temp.key = nil
+            local temp = {
+                path = responses.images[i].image,
+                key = nil
+            }
             table.insert(self.results, temp)
         end
 
         -- Use the PicViewer to display the pictures
         PicViewer:displayPic(self.results)
     else
-        -- Display an info message if no pictures are found
-        UIManager:show(
-            InfoMessage:new {
-                text = _("No chapter found!"),
-                timeout = 3
-            }
-        )
+        UIManager:show(InfoMessage:new{ text = _("No pictures found!"), timeout = 3 })
     end
+end
+
+--- Get custom headers for API requests
+-- @return A table containing custom headers for API requests.
+function MangaNova:getCustomHeaders()
+    return {
+        ["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0",
+        ["Authorization"] = "Bearer " .. self.token,
+        ["Origin"] = "https://www.manga-nova.com",
+        ["Referer"] = "https://www.manga-nova.com/",
+        ["Content-Type"] = "application/json",
+    }
 end
 
 return MangaNova
