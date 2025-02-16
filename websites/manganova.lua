@@ -31,13 +31,13 @@ function MangaNova:init()
             {
                 text = _("Search"),
                 callback = function()
-                    self:searchTitle()
+                    MangaNova:searchTitle()
                 end,
             },
             {
                 text = _("Catalogue"),
                 callback = function()
-                    self:printCatalogue(nil)
+                    MangaNova:printCatalogue()
                 end,
             },
         },
@@ -68,7 +68,7 @@ function MangaNova:searchTitle()
                     is_enter_default = true,
                     callback = function()
                         UIManager:close(self.search_server_dialog)
-                        self:printCatalogue(string.lower(self.search_server_dialog:getInputText()))
+                        MangaNova:printCatalogue(string.lower(self.search_server_dialog:getInputText()))
                     end,
                 },
             }
@@ -83,7 +83,7 @@ end
 -- @param query Optional search query to filter manga titles.
 function MangaNova:printCatalogue(query)
     local url = string.format("https://%s/catalogue/", self.domain)
-    local custom_headers = self:getCustomHeaders()
+    local custom_headers = MangaNova:getCustomHeaders()
     local responses = requestManager:customRequest(url, "GET", nil, custom_headers)
 
     if responses then
@@ -112,7 +112,7 @@ function MangaNova:printCatalogue(query)
             item_table = self.results,
             onMenuSelect = function(_, item)
                 UIManager:close(self.menu)
-                self:titleDetail(item.slug)
+                MangaNova:titleDetail(item.slug)
             end,
             close_callback = function()
                 UIManager:close(self.menu)
@@ -132,7 +132,7 @@ end
 -- @param slug The slug identifier of the manga title.
 function MangaNova:titleDetail(slug)
     local url = string.format("https://%s/mangas/%s", self.domain, slug)
-    local custom_headers = self:getCustomHeaders()
+    local custom_headers = MangaNova:getCustomHeaders()
     local responses = requestManager:customRequest(url, "GET", nil, custom_headers)
 
     if responses then
@@ -157,7 +157,7 @@ function MangaNova:titleDetail(slug)
             item_table = self.results,
             onMenuSelect = function(_, item)
                 UIManager:close(self.menu)
-                self:picList(item.slug, item.number)
+                MangaNova:picList(item.slug, item.number)
             end,
             close_callback = function()
                 UIManager:close(self.menu)
@@ -178,7 +178,7 @@ end
 -- @param chap_id The chapter number.
 function MangaNova:picList(slug, chap_id)
     local url = string.format("https://%s/mangas/%s/chapitres/%s", self.domain, slug, chap_id)
-    local custom_headers = self:getCustomHeaders()
+    local custom_headers = MangaNova:getCustomHeaders()
     local responses = requestManager:customRequest(url, "GET", nil, custom_headers)
 
     if responses then

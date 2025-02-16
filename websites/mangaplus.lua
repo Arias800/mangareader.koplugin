@@ -30,13 +30,13 @@ function MangaPlus:init()
             {
                 text = _("Search"),
                 callback = function()
-                    self:searchTitle()
+                    MangaPlus:searchTitle()
                 end,
             },
             {
                 text = _("Catalogue"),
                 callback = function()
-                    self:printCatalogue(nil)
+                    MangaPlus:printCatalogue()
                 end,
             },
         },
@@ -67,7 +67,7 @@ function MangaPlus:searchTitle()
                     is_enter_default = true,
                     callback = function()
                         UIManager:close(self.search_server_dialog)
-                        self:printCatalogue(string.lower(self.search_server_dialog:getInputText()))
+                        MangaPlus:printCatalogue(string.lower(self.search_server_dialog:getInputText()))
                     end,
                 },
             }
@@ -82,7 +82,7 @@ end
 -- @param query Optional search query to filter manga titles.
 function MangaPlus:printCatalogue(query)
     local url = string.format("https://%s/api/title_list/allV2?format=json", self.domain)
-    local customHeaders = self:getCustomHeaders()
+    local customHeaders = MangaPlus:getCustomHeaders()
     local responses = requestManager:customRequest(url, "GET", nil, customHeaders)
 
     if responses then
@@ -116,10 +116,10 @@ function MangaPlus:printCatalogue(query)
             onMenuSelect = function(_, item)
                 if #item.lang > 1 then
                     UIManager:close(self.menu)
-                    self:languageParse(item.lang)
+                    MangaPlus:languageParse(item.lang)
                 else
                     UIManager:close(self.menu)
-                    self:titleDetail(item.lang[1].titleId)
+                    MangaPlus:titleDetail(item.lang[1].titleId)
                 end
             end,
             close_callback = function()
@@ -157,7 +157,7 @@ function MangaPlus:languageParse(lang)
         item_table = self.results,
         onMenuSelect = function(_, item)
             UIManager:close(self.menu)
-            self:titleDetail(item.slug)
+            MangaPlus:titleDetail(item.slug)
         end,
         close_callback = function()
             UIManager:close(self.menu)
@@ -174,7 +174,7 @@ end
 -- @param slug The slug identifier of the manga title.
 function MangaPlus:titleDetail(slug)
     local url = string.format("https://%s/api/title_detailV3?title_id=%s&format=json", self.domain, slug)
-    local customHeaders = self:getCustomHeaders()
+    local customHeaders = MangaPlus:getCustomHeaders()
     local responses = requestManager:customRequest(url, "GET", nil, customHeaders)
 
     if responses then
@@ -182,13 +182,13 @@ function MangaPlus:titleDetail(slug)
         local baseJSON = responses.success.titleDetailView.chapterListGroup
 
         -- Extract information about chapters from the JSON response
-        for _, chapterList in pairs(baseJSON) do
-            for _, chapter in pairs(chapterList) do
-                if chapter.firstChapterList or chapter.lastChapterList then
-                    for i = 1, #chapter do
+        for _, chaptersList in pairs(baseJSON) do
+            for typeChaptList, chapters in pairs(chaptersList) do
+                if typeChaptList == "firstChapterList" or typeChaptList == "lastChapterList" then
+                    for i = 1, #chapters do
                         local temp = {
-                            text = chapter[i].name,
-                            number = chapter[i].chapterId
+                            text = chapters[i].name,
+                            number = chapters[i].chapterId
                         }
                         table.insert(self.results, temp)
                     end
@@ -203,7 +203,7 @@ function MangaPlus:titleDetail(slug)
             item_table = self.results,
             onMenuSelect = function(_, item)
                 UIManager:close(self.menu)
-                self:picList(item.number)
+                MangaPlus:picList(item.number)
             end,
             close_callback = function()
                 UIManager:close(self.menu)
@@ -223,7 +223,7 @@ end
 -- @param chap_id The chapter number.
 function MangaPlus:picList(chap_id)
     local url = string.format("https://%s/api/manga_viewer?chapter_id=%s&split=yes&img_quality=%s&format=json", self.domain, chap_id, self.quality)
-    local customHeaders = self:getCustomHeaders()
+    local customHeaders = MangaPlus:getCustomHeaders()
     local responses = requestManager:customRequest(url, "GET", nil, customHeaders)
 
     if responses then
