@@ -10,7 +10,10 @@ local InputDialog = require("ui/widget/inputdialog")
 
 local PicViewer = require("lib/picviewer")
 local requestManager = require("lib/requestmanager")
-local config = require("config")
+local Settings = require("lib/settings")
+
+-- Load the settings (or use the existing loaded config)
+local MainConfig = Settings.initializeConfig()  -- You can skip this if MainConfig is already globally accessible
 
 --- MangaNova Class
 -- Handles interactions with the MangaNova API to search, display, and read manga.
@@ -18,7 +21,7 @@ local MangaNova = WidgetContainer:extend{
     module_name = "manganova",
     results = {},
     domain = "api.manga-nova.com",
-    token = config.manganova.token,
+    token = MainConfig.manganova.token,
 }
 
 --- Initialize MangaNova

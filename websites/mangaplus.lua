@@ -10,14 +10,17 @@ local InputDialog = require("ui/widget/inputdialog")
 
 local PicViewer = require("lib/picviewer")
 local requestManager = require("lib/requestmanager")
-local config = require("config")
+local Settings = require("lib/settings")
+
+-- Load the settings (or use the existing loaded config)
+local MainConfig = Settings.initializeConfig()  -- You can skip this if MainConfig is already globally accessible
 
 --- MangaPlus Class
 -- Handles interactions with the MangaPlus API to search, display, and read manga.
 local MangaPlus = WidgetContainer:extend{
     module_name = "mangaplus",
     domain = "jumpg-webapi.tokyo-cdn.com",
-    quality = config.mangaplus.quality,
+    quality = MainConfig.mangaplus.quality,
 }
 
 --- Initialize MangaPlus

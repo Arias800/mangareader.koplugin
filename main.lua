@@ -1,14 +1,16 @@
--- Import necessary modules
 local _ = require("gettext")
 local logger = require("logger")
 local table = require("table")
-local MainConfig = require("config")
 local MultiInputDialog = require("ui/widget/multiinputdialog")
 local InfoMessage = require("ui/widget/infomessage")
 local lfs = require("libs/libkoreader-lfs")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local Menu = require("ui/widget/menu")
+local Settings = require("lib/settings")
+
+-- Initialize the config when the app starts
+local MainConfig = Settings.initializeConfig()
 
 --- MangaReader Class
 -- Handles the manga reader interface and settings.
@@ -130,7 +132,7 @@ Higher quality requires more bandwidth and storage space.
                         callback = function()
                             local fields = self.settings_dialog:getFields()
                             MainConfig.manganova.token = fields[1]
-                            self:saveConfig(MainConfig)
+                            Settings.saveConfig(MainConfig)
                             self.settings_dialog:onClose()
                             UIManager:close(self.settings_dialog)
                             UIManager:show(InfoMessage:new{
@@ -179,7 +181,7 @@ Higher quality requires more bandwidth and storage space.
                             local valid_qualities = { low = true, medium = true, high = true, super_high = true }
                             if valid_qualities[quality] then
                                 MainConfig.mangaplus.quality = quality
-                                self:saveConfig(MainConfig)
+                                Settings.saveConfig(MainConfig)
                                 self.plus_dialog:onClose()
                                 UIManager:close(self.plus_dialog)
                                 UIManager:show(InfoMessage:new{
@@ -199,9 +201,50 @@ Higher quality requires more bandwidth and storage space.
         self.plus_dialog:onShowKeyboard()
     end
 
+    --- Show Force Single-Page Display setting dialog
+    local function showSinglePageSetting()
+        self.single_page_dialog = MultiInputDialog:new{
+            title = _("Manga Reader Settings"),
+            fields = {
+                {
+                    text = MainConfig.manga_reader.single_page and _("Enable") or _("Disable"),
+                    hint = _("Toggle the display mode"),
+                },
+            },
+            buttons = {
+                {
+                    {
+                        text = _("Cancel"),
+                        id = "close",
+                        callback = function()
+                            self.single_page_dialog:onClose()
+                            UIManager:close(self.single_page_dialog)
+                        end
+                    },
+                    {
+                        text = _("Save"),
+                        callback = function()
+                            MainConfig.manga_reader.single_page = not MainConfig.manga_reader.single_page
+                            Settings.saveConfig(MainConfig)
+                            self.single_page_dialog:onClose()
+                            UIManager:close(self.single_page_dialog)
+                            UIManager:show(InfoMessage:new{
+                                text = _("Single page mode is " .. (MainConfig.manga_reader.single_page and "enabled" or "disabled") ..
+                                "\nReload Koreader for change to take effect."),
+                            })
+                        end
+                    },
+                },
+            },
+        }
+        UIManager:show(self.single_page_dialog)
+        self.single_page_dialog:onShowKeyboard()
+    end
+
     local settings_items = {
         { text = _("MangaNova Settings"), callback = showNovaSettings },
         { text = _("MangaPlus Settings"), callback = showPlusSettings },
+        { text = _("Force Single-Page Display"), callback = showSinglePageSetting },
     }
 
     self.settings_menu = Menu:new{
